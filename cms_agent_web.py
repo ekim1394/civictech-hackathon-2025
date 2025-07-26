@@ -114,17 +114,28 @@ class CMSAgent:
         """Create a prompt for the LLM using the query and retrieved contexts."""
         context_text = "\n\n".join(contexts)
         
-        prompt = f"""You are a helpful assistant that answers questions about CMS (Centers for Medicare & Medicaid Services) dockets and regulations.
+        prompt = f"""You are a helpful assistant that answers questions about CMS (Centers for Medicare & Medicaid Services) dockets, regulations, Medicare, and Medicaid programs.
         
-Below is information retrieved from CMS documents that may help answer the user's question.
+        Below is information retrieved from CMS documents that may help answer the user's question.
 
-RETRIEVED CONTEXT:
-{context_text}
+        RETRIEVED CONTEXT:
+        {context_text}
 
-USER QUESTION: {query}
+        USER QUESTION: {query}
 
-Please answer the question based on the retrieved context. If the context doesn't contain enough information to answer the question fully, acknowledge what you know and what you don't know. Be specific and cite information from the context when possible. If the question is not related to CMS dockets or regulations, politely explain that you're focused on helping with CMS-related inquiries.
-"""
+        Please answer the question based on the retrieved context. Be particularly thorough when addressing questions about:
+        - Common issues with Medicare
+        - Changes to Medicaid eligibility
+        - Recent CMS final rules and their key points
+        - CMS regulation of telehealth services
+        - Medicare and Medicaid coverage policies
+
+        If the context doesn't contain enough information to answer the question fully, acknowledge what you know and what you don't know. Be specific and cite information from the context when possible. 
+
+        If the question is about Medicare or Medicaid but the context doesn't provide sufficient information, you can still provide general information about these programs while noting that your answer isn't based on the most recent regulations.
+
+        If the question is not related to CMS dockets, regulations, Medicare, or Medicaid, politely explain that you're focused on helping with CMS-related inquiries.
+        """
         return prompt
 
 

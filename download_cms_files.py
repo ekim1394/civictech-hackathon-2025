@@ -114,8 +114,8 @@ def download_s3_files(bucket_name, prefix, local_dir=None, use_unsigned=True):
 if __name__ == "__main__":
     # Configuration
     bucket_name = "mirrulations"
-    prefix = "raw-data/CMS/CMS-2025-0013"
-    local_download_dir = "./cms_2025_data"
+    prefix = "raw-data/CMS/CMS-2025"
+    local_download_dir = "./raw_data/CMS"
 
     # Download the files with unsigned requests (equivalent to --no-sign-request)
     download_s3_files(bucket_name, prefix, local_download_dir, use_unsigned=True)

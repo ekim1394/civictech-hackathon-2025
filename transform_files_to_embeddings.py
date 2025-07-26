@@ -51,6 +51,46 @@ cms_docs = []
 base_path = Path("raw_data/CMS")
 cms_dirs = [d for d in base_path.iterdir() if d.is_dir()]
 
+# Process docket summary files
+for cms_dir in cms_dirs:
+    # Navigate to the text directory
+    text_dir = next((d for d in cms_dir.iterdir() if d.name.startswith("text-")), None)
+    if not text_dir:
+        continue
+    
+    # Navigate to the docket directory
+    docket_dir = text_dir / "docket"
+    if not docket_dir.exists():
+        continue
+    
+    # Process docket summary file (typically named after the docket ID)
+    for file_path in docket_dir.iterdir():
+        if file_path.name.endswith(".json"):
+            # Read JSON content
+            with open(file_path, 'r', encoding='utf-8') as f:
+                try:
+                    json_data = json.load(f)
+                    
+                    # Extract docket ID
+                    docket_id = json_data.get('data', {}).get('id', '')
+                    
+                    # Extract docket attributes
+                    attributes = json_data.get('data', {}).get('attributes', {})
+                    
+                    # Extract docket abstract/description
+                    docket_abstract = attributes.get('dkAbstract', '')
+                    
+                    
+                    # Add to our collection
+                    cms_docs.append({
+                        "id": f"{docket_id}_docket_summary",
+                        "text": docket_abstract if docket_abstract else "No abstract available",
+                        "source_type": "docket_summary"
+                    })
+                    
+                except Exception as e:
+                    print(f"Error processing docket file {file_path}: {e}")
+
 # Process HTML documents from text directories
 for cms_dir in cms_dirs:
     # Navigate to the text directory
@@ -94,48 +134,108 @@ for cms_dir in cms_dirs:
             
             # Add to our collection
             cms_docs.append({
-                "id": doc_id,
-                "text": text_content,
+                "id": doc_id + "_htm",
+                "text": text_content if text_content else "No text available",
                 "metadata": metadata,
                 "source_type": "html"
             })
 
-# Process PDF files from binary directories
+# Process comments from text directories
 for cms_dir in cms_dirs:
-    # Navigate to the binary directory
-    binary_dir = next((d for d in cms_dir.iterdir() if d.name.startswith("binary-")), None)
-    if not binary_dir:
+    # Navigate to the text directory
+    text_dir = next((d for d in cms_dir.iterdir() if d.name.startswith("text-")), None)
+    if not text_dir:
         continue
     
-    # Check for comments_attachments directory
-    attachments_dir = binary_dir / "comments_attachments"
-    if not attachments_dir.exists():
+    # Navigate to the comments directory
+    comments_dir = text_dir / "comments"
+    if not comments_dir.exists():
         continue
+    
+    # Process each comment JSON file
+    for file_path in comments_dir.iterdir():
+        if file_path.name.endswith(".json"):
+            # Read JSON content
+            with open(file_path, 'r', encoding='utf-8') as f:
+                try:
+                    json_data = json.load(f)
+                    
+                    # Extract comment ID
+                    comment_id = json_data.get('data', {}).get('id', '')
+                    
+                    # Extract comment text
+                    attributes = json_data.get('data', {}).get('attributes', {})
+                    comment_text = attributes.get('comment', '')
+                    
+                    # Extract metadata
+                    metadata = {
+                        "title": attributes.get("title", ""),
+                        "organization": attributes.get("organization", ""),
+                        "document_type": attributes.get("documentType", ""),
+                        "agency_id": attributes.get("agencyId", ""),
+                        "docket_id": attributes.get("docketId", ""),
+                        "posted_date": attributes.get("postedDate", ""),
+                        "comment_on_document_id": attributes.get("commentOnDocumentId", "")
+                    }
+                    
+                    # Check for attachments
+                    has_attachments = False
+                    if json_data.get('data', {}).get('relationships', {}).get('attachments', {}).get('data'):
+                        has_attachments = True
+                    
+                    # If comment text is empty or just refers to attachments, note this in metadata
+                    if not comment_text or comment_text.lower() == "see attached file(s)":
+                        metadata["comment_in_attachments"] = True
+                    
+                    # Add to our collection
+                    cms_docs.append({
+                        "id": comment_id + "_comment",
+                        "text": comment_text if comment_text else "No comment text available",
+                        "metadata": metadata,
+                        "source_type": "comment",
+                        "has_attachments": has_attachments
+                    })
+                    
+                except Exception as e:
+                    print(f"Error processing comment file {file_path}: {e}")
+
+# # Process PDF files from binary directories
+# for cms_dir in cms_dirs:
+#     # Navigate to the binary directory
+#     binary_dir = next((d for d in cms_dir.iterdir() if d.name.startswith("binary-")), None)
+#     if not binary_dir:
+#         continue
+    
+#     # Check for comments_attachments directory
+#     attachments_dir = binary_dir / "comments_attachments"
+#     if not attachments_dir.exists():
+#         continue
     
     # Process each PDF file
-    for file_path in attachments_dir.iterdir():
-        if file_path.name.endswith(".pdf"):
-            # Extract document ID and attachment number from filename
-            # Format: CMS-2025-0013-0002_attachment_1.pdf
-            parts = file_path.stem.split("_")
-            doc_id = parts[0]
-            attachment_num = parts[2] if len(parts) > 2 else "1"
+    # for file_path in attachments_dir.iterdir():
+    #     if file_path.name.endswith(".pdf"):
+    #         continue
+            # # Extract document ID and attachment number from filename
+            # # Format: CMS-2025-0013-0002_attachment_1.pdf
+            # parts = file_path.stem.split("_")
+            # doc_id = parts[0]
+            # attachment_num = parts[2] if len(parts) > 2 else "1"
             
-            # Extract text from PDF
-            text_content = extract_text_from_pdf(file_path)
+            # # Extract text from PDF
+            # text_content = extract_text_from_pdf(file_path)
             
-            if text_content:
-                # Add to our collection
-                cms_docs.append({
-                    "id": f"{doc_id}_attachment_{attachment_num}",
-                    "text": text_content,
-                    "metadata": {
-                        "document_id": doc_id,
-                        "attachment_number": attachment_num,
-                        "file_name": file_path.name
-                    },
-                    "source_type": "pdf"
-                })
+            # if text_content:
+            #     # Add to our collection
+            #     cms_docs.append({
+            #         "id": f"{doc_id}_attachment_{attachment_num}",
+            #         "text": text_content,
+            #         "metadata": {
+            #             "document_id": doc_id,
+            #             "attachment_number": attachment_num,
+            #             "file_name": file_path.name
+            #         },
+            #         "source_type": "pdf"
+            #     })
 
 print(f"Found {len(cms_docs)} documents")
 
@@ -143,7 +243,7 @@ print(f"Found {len(cms_docs)} documents")
 print("Generating embeddings...")
 for i, doc in enumerate(cms_docs):
     print(f"Processing document {i+1}/{len(cms_docs)}: {doc['id']}")
-    doc["embedding"] = get_embedding(doc["text"])
+    doc["embedding"] = get_embedding(doc['id'] + " " + doc["text"])
 
 # Write embeddings into vector index with metadata
 print("Writing embeddings to vector index...")
@@ -160,14 +260,37 @@ for doc in cms_docs:
             "posted_date": doc["metadata"].get("posted_date", ""),
             "source_type": "html"
         }
-    else:  # pdf
+    elif doc["source_type"] == "comment":
         metadata = {
             "source_text": doc["text"][:1000],  # Truncate text for metadata
-            "document_id": doc["metadata"].get("document_id", ""),
-            "attachment_number": doc["metadata"].get("attachment_number", ""),
-            "file_name": doc["metadata"].get("file_name", ""),
-            "source_type": "pdf"
+            "title": doc["metadata"].get("title", ""),
+            "document_type": doc["metadata"].get("document_type", ""),
+            "agency_id": doc["metadata"].get("agency_id", ""),
+            "docket_id": doc["metadata"].get("docket_id", ""),
+            "posted_date": doc["metadata"].get("posted_date", ""),
+            "comment_on_document_id": doc["metadata"].get("comment_on_document_id", ""),
+            "source_type": "comment"
         }
+    elif doc["source_type"] == "docket_summary":
+        metadata = {
+            "source_text": doc["text"][:1000],  # Truncate text for metadata
+            "title": doc["metadata"].get("title", ""),
+            "agency_id": doc["metadata"].get("agency_id", ""),
+            "docket_type": doc["metadata"].get("docket_type", ""),
+            "effective_date": doc["metadata"].get("effective_date", ""),
+            "modify_date": doc["metadata"].get("modify_date", ""),
+            "rin": doc["metadata"].get("rin", ""),
+            "source_type": "docket_summary"
+        }
+    else:  # pdf
+        continue
+        # metadata = {
+        #     "source_text": doc["text"][:1000],  # Truncate text for metadata
+        #     "document_id": doc["metadata"].get("document_id", ""),
+        #     "attachment_number": doc["metadata"].get("attachment_number", ""),
+        #     "file_name": doc["metadata"].get("file_name", ""),
+        #     "source_type": "pdf"
+        # }
     
     vectors.append({
         "key": doc["id"],
