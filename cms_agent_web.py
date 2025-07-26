@@ -21,7 +21,7 @@ class CMSAgent:
         self.bedrock = boto3.client("bedrock-runtime", region_name='us-east-1')
         self.s3vectors = boto3.client("s3vectors", region_name='us-east-1')
         self.vector_bucket_name = "ekim-civictech-hackathon-2025"
-        self.vector_index_name = "cms-titan"
+        self.vector_index_name = "cms-titan-3"
         
     def generate_embedding(self, text: str) -> List[float]:
         """Generate embedding for input text using Amazon Titan Text Embeddings V2."""
@@ -55,7 +55,7 @@ class CMSAgent:
         )
         # logger.info(f"Response from vector store: {response}")
         return response["vectors"]
-    
+
     def generate_response(self, query: str) -> Dict[str, Any]:
         """Generate a response to the user's query about CMS dockets."""
         # Query the vector store to get relevant context
@@ -74,6 +74,10 @@ class CMSAgent:
                 source_info = {}
                 if "docket_id" in result["metadata"]:
                     source_info["docket_id"] = result["metadata"]["docket_id"]
+                if "comment_id" in result["metadata"]:
+                    source_info["comment_id"] = result["metadata"]["comment_id"]    
+                if "link" in result["metadata"]:
+                    source_info["link"] = result["metadata"]["link"]                                
                 if "title" in result["metadata"]:
                     source_info["title"] = result["metadata"]["title"]
                 if "document_type" in result["metadata"]:
@@ -200,6 +204,8 @@ def main():
                         st.markdown(f"**Source {i}**")
                         st.markdown(f"**Title:** {source.get('title', 'Untitled')}")
                         st.markdown(f"**Docket ID:** {source.get('docket_id', 'No docket ID')}")
+                        st.markdown(f"**Comment ID:** {source.get('comment_id', 'No comment ID')}")
+                        st.markdown(f"**Link:** https://www.regulations.gov/comment/{source.get('comment_id', 'No link')}")
                         if "document_type" in source:
                             st.markdown(f"**Document Type:** {source['document_type']}")
                         if "posted_date" in source:
@@ -241,6 +247,8 @@ def main():
                             st.markdown(f"**Source {i}**")
                             st.markdown(f"**Title:** {source.get('title', 'Untitled')}")
                             st.markdown(f"**Docket ID:** {source.get('docket_id', 'No docket ID')}")
+                            st.markdown(f"**Comment ID:** {source.get('comment_id', 'No comment ID')}")
+                            st.markdown(f"**Link:** https://www.regulations.gov/comment/{source.get('comment_id', 'No link')}")
                             if "document_type" in source:
                                 st.markdown(f"**Document Type:** {source['document_type']}")
                             if "posted_date" in source:
