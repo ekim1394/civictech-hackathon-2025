@@ -194,11 +194,12 @@ def process_comments_dir(cms_dir):
                     
                     # Extract comment ID
                     comment_id = json_data.get('data', {}).get('id', '')
+                    link = json_data.get('data', {}).get('links', {}).get('self', '')
                     
                     # Extract comment text
                     attributes = json_data.get('data', {}).get('attributes', {})
                     comment_text = attributes.get('comment', '')
-                    
+                    print("Comment", comment_id, link)
                     # Extract metadata
                     metadata = {
                         "title": attributes.get("title", ""),
@@ -207,7 +208,8 @@ def process_comments_dir(cms_dir):
                         "docket_id": attributes.get("docketId", ""),
                         "posted_date": attributes.get("postedDate", ""),
                         "comment_on_document_id": attributes.get("commentOnDocumentId", ""),
-                        "link": attributes.get("links", {}).get("self", "")
+                        "link": link,
+                        "comment_id": comment_id
                     }
                     
                     # Check for attachments
@@ -383,7 +385,9 @@ if __name__ == "__main__":
                 "docket_id": doc["metadata"].get("docket_id", ""),
                 "posted_date": doc["metadata"].get("posted_date", ""),
                 "comment_on_document_id": doc["metadata"].get("comment_on_document_id", ""),
-                "source_type": "comment"
+                "source_type": "comment",
+                "comment_id": doc["metadata"].get("comment_id", ""),
+                "link": doc["metadata"].get("link", "")
             }
         elif doc["source_type"] == "docket_summary":
             metadata = {
@@ -424,7 +428,7 @@ if __name__ == "__main__":
             # Submit all batches for upload
             future_to_batch = {executor.submit(upload_vectors_batch, batch, 
                                               "ekim-civictech-hackathon-2025", 
-                                              "cms-titan"): i 
+                                              "cms-titan-3"): i 
                               for i, batch in enumerate(vector_batches)}
             
             # Process results as they complete
