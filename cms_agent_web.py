@@ -22,6 +22,7 @@ class CMSAgent:
         self.s3vectors = boto3.client("s3vectors", region_name='us-east-1')
         self.vector_bucket_name = "ekim-civictech-hackathon-2025"
         self.vector_index_name = "cms-titan-3"
+        self.max_retrieval_rounds = 3  # Maximum number of retrieval rounds
         
     def generate_embedding(self, text: str) -> List[float]:
         """Generate embedding for input text using Amazon Titan Text Embeddings V2."""
@@ -57,11 +58,51 @@ class CMSAgent:
         return response["vectors"]
 
     def generate_response(self, query: str) -> Dict[str, Any]:
-        """Generate a response to the user's query about CMS dockets."""
-        # Query the vector store to get relevant context
+        """Generate a response to the user's query about CMS dockets with agentic retrieval."""
+        # Initial retrieval round
         results = self.query_vector_store(query)
+        contexts, sources = self._extract_context_and_sources(results)
         
-        # Extract the text content and metadata from results
+        # First attempt at answering
+        prompt = self._create_prompt(query, contexts, is_follow_up=False)
+        answer, needs_more_info = self._get_model_response(prompt)
+        
+        # Agentic retrieval loop - get more context if needed
+        retrieval_round = 1
+        while needs_more_info and retrieval_round < self.max_retrieval_rounds:
+            logger.info(f"Retrieval round {retrieval_round+1}: Model needs more information")
+            
+            # Generate a refined query based on what's missing
+            refine_prompt = self._create_refine_query_prompt(query, answer, contexts)
+            refined_query = self._get_refined_query(refine_prompt)
+            
+            # Get additional context with the refined query
+            additional_results = self.query_vector_store(refined_query)
+            additional_contexts, additional_sources = self._extract_context_and_sources(additional_results)
+            
+            # Add new unique contexts and sources
+            for context in additional_contexts:
+                if context not in contexts:
+                    contexts.append(context)
+            
+            for source in additional_sources:
+                if source not in sources:
+                    sources.append(source)
+            
+            # Try answering again with expanded context
+            prompt = self._create_prompt(query, contexts, is_follow_up=True)
+            answer, needs_more_info = self._get_model_response(prompt)
+            
+            retrieval_round += 1
+        
+        return {
+            "query": query,
+            "answer": answer,
+            "sources": sources
+        }
+    
+    def _extract_context_and_sources(self, results):
+        """Extract context and source information from vector search results."""
         contexts = []
         sources = []
         
@@ -86,10 +127,11 @@ class CMSAgent:
                     source_info["posted_date"] = result["metadata"]["posted_date"]
                 logger.info(f"Source info: {source_info}")
                 sources.append(source_info)
-        
-        # Use Bedrock Claude model to generate a response based on the context
-        prompt = self._create_prompt(query, contexts)
-        
+                
+        return contexts, sources
+    
+    def _get_model_response(self, prompt: str) -> tuple:
+        """Get response from the LLM and determine if more information is needed."""
         response = self.bedrock.invoke_model(
             modelId="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
             body=json.dumps({
@@ -104,42 +146,115 @@ class CMSAgent:
             })
         )
         
-        # Extract and return the response
         response_body = json.loads(response["body"].read())
         answer = response_body["content"][0]["text"]
         
-        return {
-            "query": query,
-            "answer": answer,
-            "sources": sources
-        }
+        # Check if the answer indicates more information is needed
+        needs_more_info = self._needs_more_information(answer)
+        
+        return answer, needs_more_info
     
-    def _create_prompt(self, query: str, contexts: List[str]) -> str:
+    def _needs_more_information(self, answer: str) -> bool:
+        """Determine if the answer indicates more information is needed."""
+        # Check for phrases indicating incomplete information
+        indicators = [
+            "don't have enough information",
+            "insufficient information",
+            "not enough context",
+            "can't determine",
+            "need more details",
+            "information is limited",
+            "context doesn't provide",
+            "can't answer fully",
+            "limited context"
+        ]
+        
+        return any(indicator.lower() in answer.lower() for indicator in indicators)
+    
+    def _create_refine_query_prompt(self, original_query: str, current_answer: str, current_contexts: List[str]) -> str:
+        """Create a prompt to generate a refined search query."""
+        context_summary = "\n\n".join(current_contexts[:3])  # Use first few contexts for brevity
+        
+        prompt = f"""Based on the original user question and the current answer, generate a new search query that would help retrieve additional relevant information.
+
+        ORIGINAL QUESTION: {original_query}
+        
+        CURRENT ANSWER: {current_answer}
+        
+        CURRENT CONTEXT SUMMARY (partial):
+        {context_summary}
+        
+        Your task is to create a new search query that will help find additional information to better answer the original question. Focus on aspects that seem to be missing or incomplete in the current answer.
+        
+        Return ONLY the new search query text, nothing else.
+        """
+        return prompt
+    
+    def _get_refined_query(self, prompt: str) -> str:
+        """Get a refined query from the LLM."""
+        response = self.bedrock.invoke_model(
+            modelId="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+            body=json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 100,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            })
+        )
+        
+        response_body = json.loads(response["body"].read())
+        refined_query = response_body["content"][0]["text"].strip()
+        logger.info(f"Refined query: {refined_query}")
+        
+        return refined_query
+    
+    def _create_prompt(self, query: str, contexts: List[str], is_follow_up: bool = False) -> str:
         """Create a prompt for the LLM using the query and retrieved contexts."""
         context_text = "\n\n".join(contexts)
         
-        prompt = f"""You are a helpful assistant that answers questions about CMS (Centers for Medicare & Medicaid Services) dockets, regulations, Medicare, and Medicaid programs.
+        # Adjust prompt based on whether this is an initial or follow-up query
+        if not is_follow_up:
+            prompt = f"""You are a helpful assistant that answers questions about CMS (Centers for Medicare & Medicaid Services) dockets, regulations, Medicare, and Medicaid programs.
+            
+            Below is information retrieved from CMS documents that may help answer the user's question.
+
+            RETRIEVED CONTEXT:
+            {context_text}
+
+            USER QUESTION: {query}
+
+            Please answer the question based on the retrieved context. Be particularly thorough when addressing questions about:
+            - Common issues with Medicare
+            - Changes to Medicaid eligibility
+            - Recent CMS final rules and their key points
+            - CMS regulation of telehealth services
+            - Medicare and Medicaid coverage policies
+
+            If the context doesn't contain enough information to answer the question fully, acknowledge what you know and what you don't know. Be specific about what additional information would be helpful. Use phrases like "I don't have enough information about X" or "The context doesn't provide details on Y."
+
+            If the question is about Medicare or Medicaid but the context doesn't provide sufficient information, you can still provide general information about these programs while noting that your answer isn't based on the most recent regulations.
+
+            If the question is not related to CMS dockets, regulations, Medicare, or Medicaid, politely explain that you're focused on helping with CMS-related inquiries.
+            """
+        else:
+            prompt = f"""You are a helpful assistant that answers questions about CMS (Centers for Medicare & Medicaid Services) dockets, regulations, Medicare, and Medicaid programs.
+            
+            Below is expanded information retrieved from CMS documents that may help answer the user's question. This includes additional context that was retrieved to provide a more complete answer.
+
+            EXPANDED RETRIEVED CONTEXT:
+            {context_text}
+
+            USER QUESTION: {query}
+
+            Please provide a comprehensive answer to the question based on all the retrieved context. Be particularly thorough and try to address all aspects of the question.
+
+            If there are still aspects of the question that cannot be answered with the available information, acknowledge this clearly.
+            """
         
-        Below is information retrieved from CMS documents that may help answer the user's question.
-
-        RETRIEVED CONTEXT:
-        {context_text}
-
-        USER QUESTION: {query}
-
-        Please answer the question based on the retrieved context. Be particularly thorough when addressing questions about:
-        - Common issues with Medicare
-        - Changes to Medicaid eligibility
-        - Recent CMS final rules and their key points
-        - CMS regulation of telehealth services
-        - Medicare and Medicaid coverage policies
-
-        If the context doesn't contain enough information to answer the question fully, acknowledge what you know and what you don't know. Be specific and cite information from the context when possible. 
-
-        If the question is about Medicare or Medicaid but the context doesn't provide sufficient information, you can still provide general information about these programs while noting that your answer isn't based on the most recent regulations.
-
-        If the question is not related to CMS dockets, regulations, Medicare, or Medicaid, politely explain that you're focused on helping with CMS-related inquiries.
-        """
         return prompt
 
 
