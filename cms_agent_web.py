@@ -3,7 +3,6 @@
 import streamlit as st
 import boto3
 import json
-import os
 import dotenv
 from typing import List, Dict, Any
 import logging
@@ -57,10 +56,10 @@ class CMSAgent:
         # logger.info(f"Response from vector store: {response}")
         return response["vectors"]
 
-    def generate_response(self, query: str) -> Dict[str, Any]:
+    def generate_response(self, query: str, top_k: int = 5) -> Dict[str, Any]:
         """Generate a response to the user's query about CMS dockets with agentic retrieval."""
         # Initial retrieval round
-        results = self.query_vector_store(query)
+        results = self.query_vector_store(query, top_k=top_k)
         contexts, sources = self._extract_context_and_sources(results)
         
         # First attempt at answering
@@ -77,7 +76,7 @@ class CMSAgent:
             refined_query = self._get_refined_query(refine_prompt)
             
             # Get additional context with the refined query
-            additional_results = self.query_vector_store(refined_query)
+            additional_results = self.query_vector_store(refined_query, top_k=top_k)
             additional_contexts, additional_sources = self._extract_context_and_sources(additional_results)
             
             # Add new unique contexts and sources
@@ -341,7 +340,7 @@ def main():
             with st.spinner("Searching CMS documents..."):
                 try:
                     # Generate response
-                    result = st.session_state.agent.generate_response(prompt)
+                    result = st.session_state.agent.generate_response(prompt, top_k=top_k)
                     
                     # Display the answer
                     st.markdown(result["answer"])

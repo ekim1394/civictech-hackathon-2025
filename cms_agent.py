@@ -2,7 +2,6 @@
 
 import boto3
 import json
-import os
 import dotenv
 from typing import List, Dict, Any
 
