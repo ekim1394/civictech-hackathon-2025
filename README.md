@@ -1,8 +1,15 @@
-# CMS Data Embeddings Generator
+# CMS Data Embeddings Generator and Agent
 
-This script processes CMS document files, extracts text content, generates embeddings, and prepares them for loading into an S3 vector store.
+This project consists of two main components:
 
-## Setup
+1. A data processing pipeline that extracts CMS document content and generates vector embeddings
+2. A RAG-powered agent that answers questions about CMS regulations using the vector database
+
+## Data Processing Pipeline
+
+The `transform_files_to_embeddings.py` script processes CMS document files from local storage, extracts text content, generates embeddings using Amazon Titan Text Embeddings V2, and uploads them to an S3 vector store.
+
+### Setup
 
 1. Install the required dependencies:
 
@@ -10,7 +17,9 @@ This script processes CMS document files, extracts text content, generates embed
 pip install -r requirements.txt
 ```
 
-## Usage
+2. Ensure you have AWS credentials configured with access to Bedrock and S3 Vectors services.
+
+### Usage
 
 Basic usage:
 
@@ -18,74 +27,45 @@ Basic usage:
 python transform_files_to_embeddings.py
 ```
 
-This will process files from `raw_data/CMS` and save embeddings to `processed_data/embeddings`.
+This will process files from `raw_data/CMS` and upload the embeddings to the S3 vector store.
 
-### Command Line Options
+### Data Processing Details
 
-- `--input-dir`: Input directory containing CMS files (default: "raw_data/CMS")
-- `--output-dir`: Output directory for embeddings (default: "processed_data/embeddings")
-- `--chunk-size`: Chunk size for text splitting (default: 1000)
-- `--chunk-overlap`: Chunk overlap for text splitting (default: 200)
-- `--model-name`: Embedding model name (default: "BAAI/bge-small-en-v1.5")
-- `--upload-to-s3`: Flag to upload results to S3
-- `--s3-bucket`: S3 bucket name (required if --upload-to-s3 is used)
-- `--s3-prefix`: S3 prefix (default: "cms_embeddings")
-
-### Example with S3 Upload
-
-```bash
-python transform_files_to_embeddings.py --upload-to-s3 --s3-bucket my-vector-store-bucket --s3-prefix cms_data
-```
-
-## Output Format
-
-The script generates parquet files containing:
-- Document text chunks
-- Metadata from the original files
-- Vector embeddings
-
-Each parquet file contains a batch of document chunks with their embeddings, ready to be loaded into a vector database.
-
-## Data Structure
-
-The script processes the following structure:
-- JSON metadata files (containing document information)
-- HTML content files (containing the actual document text)
-- Comments and other related documents
-
-The script extracts text from HTML, chunks it into smaller segments, and generates embeddings for each chunk while preserving the original metadata.
+The script:
+- Processes multiple CMS directories in parallel
+- Extracts text from HTML documents, docket summaries, and comments
+- Generates embeddings using Amazon Titan Text Embeddings V2
+- Uploads vectors to an S3 vector store in batches
+- Preserves metadata from the original documents
 
 ## CMS Agent
 
-The project includes a CMS Agent that can answer questions about CMS dockets and regulations using the vector store.
-
-### Command Line Agent
-
-Run the command-line agent:
-
-```bash
-python cms_agent.py
-```
-
-This will start an interactive session where you can ask questions about CMS dockets.
+The project includes a CMS Agent that can answer questions about CMS dockets and regulations using the vector store and RAG (Retrieval-Augmented Generation).
 
 ### Web Interface
 
-Run the web interface:
+Run the Streamlit web application:
 
 ```bash
 streamlit run cms_agent_web.py
 ```
 
-This will start a Streamlit web application where you can interact with the CMS Agent through a user-friendly interface.
-
-### Features
-
-- Query the vector store for relevant CMS documents
-- Get AI-generated answers based on the retrieved context
+This starts a user-friendly chat interface where you can:
+- Ask questions about CMS dockets and regulations
+- Get AI-generated answers based on retrieved document context
 - View source information for transparency
-- Chat history for continued conversations
-- Adjustable number of sources to retrieve
+- Maintain chat history for continued conversations
+- Adjust the number of sources to retrieve
+
+### How the Agent Works
+
+The `cms_agent_web.py` script:
+1. Takes user questions through a Streamlit chat interface
+2. Converts the question to an embedding using Amazon Titan Text Embeddings V2
+3. Queries the S3 vector store to retrieve relevant document chunks
+4. Constructs a prompt with the retrieved context
+5. Uses Amazon Bedrock (Claude 3 Sonnet) to generate a response
+6. Displays the answer along with source information
 
 ### Example Questions
 

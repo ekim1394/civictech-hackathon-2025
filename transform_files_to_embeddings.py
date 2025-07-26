@@ -104,6 +104,9 @@ def process_docket_dir(cms_dir):
                     results.append({
                         "id": f"{docket_id}_docket_summary",
                         "text": docket_abstract if docket_abstract else "No abstract available",
+                        "metadata": {
+                            "link": attributes.get("links", {}).get("self", "")
+                        },
                         "source_type": "docket_summary"
                     })
                     
@@ -152,7 +155,8 @@ def process_documents_dir(cms_dir):
                         "document_type": attributes.get("documentType", ""),
                         "agency_id": attributes.get("agencyId", ""),
                         "docket_id": attributes.get("docketId", ""),
-                        "posted_date": attributes.get("postedDate", "")
+                        "posted_date": attributes.get("postedDate", ""),
+                        "link": attributes.get("links", {}).get("self", "")
                     }
             
             # Add to our collection if text content is not empty
@@ -202,7 +206,8 @@ def process_comments_dir(cms_dir):
                         "agency_id": attributes.get("agencyId", ""),
                         "docket_id": attributes.get("docketId", ""),
                         "posted_date": attributes.get("postedDate", ""),
-                        "comment_on_document_id": attributes.get("commentOnDocumentId", "")
+                        "comment_on_document_id": attributes.get("commentOnDocumentId", ""),
+                        "link": attributes.get("links", {}).get("self", "")
                     }
                     
                     # Check for attachments

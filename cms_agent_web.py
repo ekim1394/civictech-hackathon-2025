@@ -182,6 +182,11 @@ def main():
         
         st.header("Settings")
         top_k = st.slider("Number of sources to retrieve", min_value=1, max_value=10, value=5)
+        
+        # Add clear chat button
+        if st.button("Clear Chat"):
+            st.session_state.messages = []
+            st.rerun()
     
     # Display chat history
     for message in st.session_state.messages:
