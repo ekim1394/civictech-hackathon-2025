@@ -1,8 +1,11 @@
 # CMS Data Embeddings Generator and Agent
 
 Created by
+
 [Eugene Kim](https://www.linkedin.com/in/kimeug/)
+
 Tracy Weener
+
 Osana
 
 This project consists of two main components:
